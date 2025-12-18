@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Countdown Overlay</title>
+  <style>
+    /* Transparent and sized to content for OBS */
+    html, body { margin: 0; padding: 0; background: rgba(0,0,0,0); width: -moz-fit-content; width: fit-content; height: -moz-fit-content; height: fit-content; }
+    /* Inline-block keeps doc sized to content; OBS bounding box still uses source W×H */
+    body { display: inline-block; }
+    #wrap { display: inline-block; text-align: center; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; transform-origin: top left; }
+    #time { font-weight: 800; color: white; font-size: 72px; line-height: 1.05; white-space: nowrap; text-shadow: 0 0 10px rgba(0,0,0,0.7), 0 0 2px rgba(0,0,0,0.9); }
+    #msg { margin-top: 6px; color: white; font-size: 28px; line-height: 1.1; opacity: 0.9; white-space: nowrap; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="time">--</div>
+    <div id="msg" class="hidden"></div>
+  </div>
+  <script>
+    (function(){
+      const params = new URLSearchParams(location.search);
+      const color = params.get('color') || 'white';
+      const size = parseInt(params.get('size') || '72', 10);
+      const showWhenInactive = params.get('showWhenInactive') === '1';
+      const timeEl = document.getElementById('time');
+      const msgEl = document.getElementById('msg');
+      const wrapEl = document.getElementById('wrap');
+      if (color) { timeEl.style.color = color; msgEl.style.color = color; }
+      if (size) { timeEl.style.fontSize = size + 'px'; }
+      const scale = parseFloat(params.get('scale') || '1');
+      if (!isNaN(scale) && scale !== 1) { wrapEl.style.transform = 'scale(' + scale + ')'; }
+
+      const es = new EventSource('/overlay/stream');
+      es.onmessage = (ev) => {
+        try {
+          const s = JSON.parse(ev.data || '{}');
+          const running = !!s.running;
+          const remaining = Math.max(0, +s.remaining || 0);
+          const formatted = s.formatted || '--';
+          const finishMessage = s.finishMessage || '';
+
+          timeEl.textContent = formatted;
+
+          if (running) {
+            msgEl.classList.add('hidden');
+          } else {
+            if (remaining <= 0 && finishMessage) {
+              msgEl.textContent = finishMessage;
+              msgEl.classList.remove('hidden');
+            } else {
+              msgEl.textContent = '';
+              msgEl.classList.add('hidden');
+            }
+          }
+
+          if (!running && remaining === 0 && !showWhenInactive && !finishMessage) {
+            wrapEl.classList.add('hidden');
+          } else {
+            wrapEl.classList.remove('hidden');
+          }
+        } catch (e) { /* ignore */ }
+      };
+      es.onerror = () => { /* keep trying; EventSource auto-reconnects */ };
+    })();
+  </script>
+</body>
+</html>
